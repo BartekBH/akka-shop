@@ -1,9 +1,9 @@
 package domain
 
-import spray.json.DefaultJsonProtocol
+import spray.json._
 
 case class Product(name: String, category: String, price: BigDecimal, quantity: Int)
 
-trait ProductStoreJsonProtocol extends DefaultJsonProtocol {
-  implicit val productFormat = jsonFormat4(Product)
+trait ShopJsonProtocol extends DefaultJsonProtocol {
+  implicit val productFormat: JsonFormat[Product] = jsonFormat4(Product)
 }

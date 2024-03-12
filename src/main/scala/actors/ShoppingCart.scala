@@ -25,10 +25,13 @@ class ShoppingCart extends Actor with ActorLogging {
       if (products.contains(productId)) {
         val newProductQuantity = products(productId) + quantity
         products(productId) = newProductQuantity
+        log.info("Product added")
+        sender() ! newProductQuantity
       } else {
         products += (productId -> quantity)
+        log.info("Product added")
+        sender() ! quantity
       }
-      sender() ! quantity
 
     case DeleteProduct(productId, quantity) =>
       // TODO prevent deleting more than exists
@@ -36,10 +39,13 @@ class ShoppingCart extends Actor with ActorLogging {
       val newQuantity: Option[Int] = crrQuantity.map(_ - quantity)
 
       newQuantity.foreach(q => products = products + (productId -> q))
+      log.info("Product deleted")
       sender() ! newQuantity
 
-
     case Buy =>
-      sender() ! products
+      val boughtProducts = products
+      products = mutable.Map[String, Int]()
+
+      sender() ! boughtProducts
   }
 }
