@@ -1,6 +1,6 @@
 package actors
 
-import actors.ShoppingCart.{AddProduct, Buy, DeleteProduct}
+import actors.PersistentShoppingCart.Response.ProductAddedResponse
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.pattern.ask
 import akka.util.Timeout
@@ -14,108 +14,112 @@ import scala.language.postfixOps
 import scala.util.{Failure, Success}
 
 object Shop {
-  // messages
-  case object CreateShoppingCart
-  case class CreateProduct(product: Product)
-  case class BuySC(shoppingCartId: String)
-  case class FindProduct(productId: String)
-  case object FindAllProducts
-  case class AddProductToSC(shoppingCartId: String, productId: String, quantity: Int)
-  case class DeleteProductFromSC(shoppingCartId: String, productId: String, quantity: Int)
 
+  // commands = messages
+  trait Command
+  import actors.PersistentShoppingCart.Command._
+  case object CreateShoppingCart extends Command
+  case object GetBalance extends Command
+
+  /*
+  // events (to persist to Cassandra)
+  trait Event
+  case class ShoppingCartCreated(id: String) extends Event
+   */
+
+  // responses
   trait Response
-  case class ShoppingCartCreated(shoppingCartId: String) extends Response
-  case class ProductCreated(productId: String) extends Response
-  case class ProductAdded(quantity: Int) extends Response
-  case class ProductDeleted(quantity: Int) extends Response
-  case class Bought(amount: BigDecimal) extends Response
+
+  import actors.PersistentShoppingCart.Response._
+  case class ShoppingCartCreatedResponse(id: String) extends Response
+  case class GetBalanceResponse(balance: BigDecimal) extends Response
+  case class ShoppingCartNotExistsResponse(id: String) extends Response
 }
 
 class Shop extends Actor with ActorLogging {
   import Shop._
+  import PersistentShoppingCart.Command._
+  import PersistentShoppingCart.Response._
   import scala.concurrent.ExecutionContext.Implicits.global
   implicit val timeout = Timeout(2 seconds)
 
 
-  var shoppingCarts: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef]()
+  val shoppingCarts: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef]()
   var balance: BigDecimal = BigDecimal("0")
-  var products: Map[String, Product] = Map()
 
   override def receive: Receive = {
     case CreateShoppingCart =>
-      val id = UUID.randomUUID().toString
-      val newShoppingCart = context.actorOf(Props[ShoppingCart], id)
+      val replyTo: ActorRef = sender
+      val id: String = UUID.randomUUID().toString
+      val newShoppingCart = context.actorOf(Props[PersistentShoppingCart], id)
       shoppingCarts += (id -> newShoppingCart)
-      sender() ! ShoppingCartCreated(id)
+
       log.info(s"Shopping cart created with id: $id")
+      replyTo ! ShoppingCartCreatedResponse(id)
 
-    case CreateProduct(product) =>
-      val id = UUID.randomUUID().toString
-      products += (id -> product)
-      sender() ! ProductCreated(id)
-      log.info(s"Product created with id: $id")
-
-    case BuySC(shoppingCartId) =>
-      val replyTo = sender
-      val currentBalance = balance
-      val buyFuture: Future[mutable.Map[String, Int]] = (shoppingCarts(shoppingCartId) ? Buy).mapTo[mutable.Map[String, Int]]
-      buyFuture.onComplete {
-        case Success(v) =>
-          v.foreach { p: (String, Int) =>
-            val productId: String = p._1
-
-            val quantity: Int = p._2
-            val product: Option[Product] = products.get(productId)
-            val newProduct: Option[Product] = product.map {
-              case Product(name, category, price, q) => Product(name, category, price, q + quantity)
-            }
-            newProduct.foreach(product => products = products + (productId -> product))
-
-            val price: Option[BigDecimal] = product.map {
-              case Product(_, _, price, _) => price
-            }
-
-            val amount: BigDecimal = price.get * quantity
-            balance += amount
+    case command@AddProduct(id, _, _) =>
+      val replyTo: ActorRef = sender
+      val maybeShoppingCart: Option[ActorRef] = shoppingCarts.get(id)
+      maybeShoppingCart match {
+        case None =>
+          log.info(s"Shopping cart with id: $id don't exists")
+          replyTo ! ShoppingCartNotExistsResponse
+        case Some(shoppingCart) =>
+          val addProductFuture: Future[ProductAddedResponse] = (shoppingCart ? command).mapTo[ProductAddedResponse]
+          addProductFuture.onComplete {
+            case Success(response) =>
+              log.info(s"Product added to shopping cart with id: $id")
+              replyTo ! response
+            case Failure(ex) =>
+              log.warning(s"Adding product failed: $ex")
           }
-          replyTo ! Bought(balance - currentBalance)
-          log.info("Buying finished")
-        case Failure(ex) =>
-          log.warning("Buying failed")
       }
 
-
-    case FindProduct(id) =>
-      val product: Option[Product] = products.get(id)
-      sender() ! product
-      log.info(s"Product with id $id found")
-
-    case FindAllProducts =>
-      val productsList: List[Product] = products.values.toList
-      sender() ! productsList
-
-    case AddProductToSC(shoppingCartId, productId, quantity) =>
-      val replyTo = sender
-      val addFuture: Future[Int] = (shoppingCarts(shoppingCartId) ? AddProduct(productId, quantity)).mapTo[Int]
-      addFuture.onComplete {
-        case Success(q) =>
-          log.info(s"Product added successfully to shopping cart with id: $shoppingCartId")
-          replyTo ! ProductAdded(q)
-
-        case Failure(ex) =>
-          log.warning("Adding product failed")
+    case command@BuyProducts(id) =>
+      val replyTo: ActorRef = sender
+      val maybeShoppingCart: Option[ActorRef] = shoppingCarts.get(id)
+      maybeShoppingCart match {
+        case None =>
+          log.info(s"Shopping cart with id: $id don't exists")
+          replyTo ! ShoppingCartNotExistsResponse
+        case Some(shoppingCart) =>
+          val buyProductsFuture: Future[ProductsBoughtResponse] = (shoppingCart ? command).mapTo[ProductsBoughtResponse]
+          buyProductsFuture.onComplete {
+            case Success(response) =>
+              val currentBalance = balance
+              response.products.foreach { p =>
+                val price = p._1.price
+                val quantity = p._2
+                balance += price * quantity
+              }
+              log.info(s"Inventory of shopping cart $id was bought for ${balance - currentBalance}")
+              replyTo ! response
+            case Failure(ex) =>
+              log.warning(s"Buying products failed: $ex")
+          }
       }
 
-    case DeleteProductFromSC(shoppingCartId, productId, quantity) =>
-      val replyTo = sender
-      val deleteFuture: Future[Int] = (shoppingCarts(shoppingCartId) ? DeleteProduct(productId, quantity)).mapTo[Int]
-      deleteFuture.onComplete {
-        case Success(q) =>
-          log.info(s"Product deleted successfully from shopping cart with id: $shoppingCartId")
-          replyTo ! ProductDeleted(q)
-
-        case Failure(ex) =>
-          log.warning("Deleting product failed")
+    case command@GetProducts(id) =>
+      val replyTo: ActorRef = sender
+      val maybeShoppingCart: Option[ActorRef] = shoppingCarts.get(id)
+      maybeShoppingCart match {
+        case None =>
+          log.info(s"Shopping cart with id: $id don't exists")
+          replyTo ! ShoppingCartNotExistsResponse
+        case Some(shoppingCart) =>
+          val getProductsFuture: Future[GetProductsResponse] = (shoppingCart ? command).mapTo[GetProductsResponse]
+          getProductsFuture.onComplete {
+            case Success(response) =>
+              log.info(s"Getting products from shopping cart with id: $id")
+              replyTo ! response
+            case Failure(ex) =>
+              log.warning(s"Getting products failed: $ex")
+          }
       }
+
+    case GetBalance =>
+      val replyTo: ActorRef = sender
+      replyTo ! GetBalanceResponse(balance)
+
   }
 }

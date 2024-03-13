@@ -2,8 +2,8 @@ package domain
 
 import spray.json._
 
-case class Product(name: String, category: String, price: BigDecimal, quantity: Int)
+case class Product(name: String, category: String, price: BigDecimal)
 
 trait ShopJsonProtocol extends DefaultJsonProtocol {
-  implicit val productFormat: JsonFormat[Product] = jsonFormat4(Product)
+  implicit val productsFormat: JsonFormat[Product] = jsonFormat3(Product)
 }
