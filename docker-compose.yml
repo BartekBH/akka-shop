@@ -3,7 +3,9 @@ version: '3.8'
 services:
   cassandra:
     image: cassandra:4.0.4
+    container_name: akka-shop-cassandra
     ports:
-      - 9042:9042
+      - "7000:7000"
+      - "9042:9042"
     environment:
-      - CASSANDRA_CLUSTER_NAME=akka-cassandra-cluster
+      - CASSANDRA_CLUSTER_NAME=akka-shop-cassandra-cluster
