@@ -1,6 +1,6 @@
-lazy val akkaVersion = "2.9.0-M2"
-lazy val akkaHttpVersion = "10.6.0-M1"
-//lazy val scalaTestVersion = "3.0.5"
+lazy val akkaVersion = "2.5.23"
+lazy val akkaHttpVersion = "10.1.8"
+lazy val cassandraVersion = "0.98"
 
 scalaVersion    := "2.13.13"
 name := "akka-shop"
@@ -12,8 +12,8 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
   "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion,
   "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpVersion,
-  // testing
-//  "com.typesafe.akka" %% "akka-testkit" % akkaVersion,
-//  "org.scalatest" %% "scalatest" % scalaTestVersion
-
+  // akka persistence
+  "com.typesafe.akka"          %% "akka-persistence" % akkaVersion,
+  // Cassandra
+  "com.typesafe.akka" %% "akka-persistence-cassandra" % cassandraVersion
 )
