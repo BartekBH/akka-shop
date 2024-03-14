@@ -119,6 +119,7 @@ class Shop extends Actor with ActorLogging {
 
     case GetBalance =>
       val replyTo: ActorRef = sender
+      log.info("Current balance: " + balance)
       replyTo ! GetBalanceResponse(balance)
 
   }

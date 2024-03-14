@@ -62,8 +62,8 @@ class PersistentShoppingCart extends Actor with ActorLogging {
         log.info("Shopping cart is empty")
         replyTo ! ProductsBoughtResponse(products)
       } else {
-        val currentProducts = products
-        currentProducts.foreach { p =>
+        val currentProducts = products.clone()
+        products.foreach { p =>
           products.remove(p._1)
         }
 
