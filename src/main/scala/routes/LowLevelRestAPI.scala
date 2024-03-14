@@ -1,13 +1,13 @@
 package routes
 
-import actors.PersistentShoppingCart.Command.{AddProduct, BuyProducts, GetProducts}
-import actors.PersistentShoppingCart.Response.{GetProductsResponse, ProductAddedResponse, ProductsBoughtResponse}
+import actors.PersistentShoppingCart.Command._
+import actors.PersistentShoppingCart.Response._
 import actors.Shop._
 import domain._
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethods, HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.pattern.ask
-import akka.stream.Materializer
+import akka.stream.{ActorMaterializer, Materializer}
 import akka.util.Timeout
 import spray.json._
 
@@ -19,7 +19,7 @@ import scala.math.BigDecimal
 
 class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) extends ShopJsonProtocol {
 
-  implicit val metarializer = Materializer
+  implicit val metarializer = ActorMaterializer()
   implicit val timeout = Timeout(5 seconds)
   import system.dispatcher
 
