@@ -1,8 +1,10 @@
 package actors
 
-import akka.actor.{Actor, ActorLogging, ActorRef}
+import akka.actor.{ActorLogging, ActorRef}
+import akka.persistence.PersistentActor
 import domain._
 
+import java.util.UUID
 import scala.collection.mutable
 
 object PersistentShoppingCart {
@@ -15,12 +17,12 @@ object PersistentShoppingCart {
     case class GetProducts(id: String) extends Command
   }
 
-  /*
   // events (to persist to Cassandra)
   trait Event
-  case class ProductAdded(product: Product, quantity: Int) extends Event
-  case object ProductsBought
-   */
+  object Event {
+    case class ProductAdded(product: Product, quantity: Int) extends Event
+    case class ProductsBought(products: mutable.Map[Product, Int])
+  }
 
   // responses
   trait Response
@@ -31,44 +33,53 @@ object PersistentShoppingCart {
   }
 }
 
-class PersistentShoppingCart extends Actor with ActorLogging {
+class PersistentShoppingCart(id: String) extends PersistentActor with ActorLogging {
   import PersistentShoppingCart.Command._
   import PersistentShoppingCart.Response._
+  import actors.PersistentShoppingCart.Event._
 
   val products: mutable.Map[Product, Int] = mutable.Map[Product, Int]()
 
-  override def receive: Receive = {
+  override def persistenceId: String = id
+
+  override def receiveCommand: Receive = {
     case AddProduct(_, product, quantity) =>
       val replyTo: ActorRef = sender
-      val maybeQuantity: Option[Int] = products.get(product)
-      maybeQuantity match {
-        case Some(q) =>
-          val newQuantity = q + quantity
-          products += (product -> newQuantity)
 
-          log.info(s"Product ${product.name} added. Current quantity: $newQuantity")
-          replyTo ! ProductAddedResponse(newQuantity)
+      persist(ProductAdded(product, quantity)) { e =>
+        val maybeQuantity: Option[Int] = products.get(product)
+        maybeQuantity match {
+          case Some(q) =>
+            val newQuantity = q + quantity
+            products += (product -> newQuantity)
 
-        case None =>
-          products += (product -> quantity)
+            log.info(s"Product ${product.name} added. Current quantity: $newQuantity")
+            replyTo ! ProductAddedResponse(newQuantity)
 
-          log.info(s"Product ${product.name} added. Current quantity: $quantity")
-          replyTo ! ProductAddedResponse(quantity)
+          case None =>
+            products += (product -> quantity)
+
+            log.info(s"Product ${product.name} added. Current quantity: $quantity")
+            replyTo ! ProductAddedResponse(quantity)
+        }
       }
 
     case BuyProducts(_) =>
       val replyTo: ActorRef = sender
-      if (products.isEmpty) {
-        log.info("Shopping cart is empty")
-        replyTo ! ProductsBoughtResponse(products)
-      } else {
-        val currentProducts = products.clone()
-        products.foreach { p =>
-          products.remove(p._1)
-        }
 
-        log.info("All products was bought")
-        replyTo ! ProductsBoughtResponse(currentProducts)
+      persist(ProductsBought(products)) { e =>
+        if (products.isEmpty) {
+          log.info("Shopping cart is empty")
+          replyTo ! ProductsBoughtResponse(products)
+        } else {
+          val currentProducts = products.clone()
+          products.foreach { p =>
+            products.remove(p._1)
+          }
+
+          log.info("All products was bought")
+          replyTo ! ProductsBoughtResponse(currentProducts)
+        }
       }
 
     case GetProducts(_) =>
@@ -76,5 +87,25 @@ class PersistentShoppingCart extends Actor with ActorLogging {
 
       log.info("Getting products from shopping cart")
       replyTo ! GetProductsResponse(products)
+  }
+
+  override def receiveRecover: Receive = {
+    case ProductAdded(product, quantity) =>
+      val maybeQuantity: Option[Int] = products.get(product)
+      maybeQuantity match {
+        case Some(q) =>
+          val newQuantity = q + quantity
+          products += (product -> newQuantity)
+          log.info(s"Recovered ${product.name} with quantity $quantity")
+
+        case None =>
+          products += (product -> quantity)
+          log.info(s"Recovered ${product.name} with quantity $quantity")
+      }
+    case ProductsBought(_) =>
+      products.foreach { p =>
+        products.remove(p._1)
+      }
+      log.info("Recovered buying products")
   }
 }

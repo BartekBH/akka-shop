@@ -1,8 +1,11 @@
 package actors
 
+import actors.PersistentShoppingCart.Event.ProductsBought
+import actors.PersistentShoppingCart.Response
 import actors.PersistentShoppingCart.Response.ProductAddedResponse
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.pattern.ask
+import akka.persistence.PersistentActor
 import akka.util.Timeout
 import domain.Product
 
@@ -18,25 +21,26 @@ object Shop {
   // commands = messages
   trait Command
   import actors.PersistentShoppingCart.Command._
-  case object CreateShoppingCart extends Command
   case object GetBalance extends Command
+  case object CreateShoppingCart extends Command
 
-  /*
+
   // events (to persist to Cassandra)
   trait Event
+  import PersistentShoppingCart.Event.ProductsBought
   case class ShoppingCartCreated(id: String) extends Event
-   */
+
 
   // responses
   trait Response
 
   import actors.PersistentShoppingCart.Response._
-  case class ShoppingCartCreatedResponse(id: String) extends Response
   case class GetBalanceResponse(balance: BigDecimal) extends Response
   case class ShoppingCartNotExistsResponse(id: String) extends Response
+  case class ShoppingCartCreatedResponse(id: String) extends Response
 }
 
-class Shop extends Actor with ActorLogging {
+class Shop extends PersistentActor with ActorLogging {
   import Shop._
   import PersistentShoppingCart.Command._
   import PersistentShoppingCart.Response._
@@ -47,15 +51,21 @@ class Shop extends Actor with ActorLogging {
   val shoppingCarts: mutable.Map[String, ActorRef] = mutable.Map[String, ActorRef]()
   var balance: BigDecimal = BigDecimal("0")
 
-  override def receive: Receive = {
+  override def persistenceId: String = "akka-shop"
+
+  override def receiveCommand: Receive = {
     case CreateShoppingCart =>
       val replyTo: ActorRef = sender
       val id: String = UUID.randomUUID().toString
-      val newShoppingCart = context.actorOf(Props[PersistentShoppingCart], id)
-      shoppingCarts += (id -> newShoppingCart)
 
-      log.info(s"Shopping cart created with id: $id")
-      replyTo ! ShoppingCartCreatedResponse(id)
+      persist(ShoppingCartCreated(id)) { e =>
+        val newShoppingCart = context.actorOf(Props(new PersistentShoppingCart(id)), id)
+
+        shoppingCarts += (id -> newShoppingCart)
+
+        log.info(s"Shopping cart created with id: ${id}")
+        replyTo ! ShoppingCartCreatedResponse(id)
+      }
 
     case command@AddProduct(id, _, _) =>
       val replyTo: ActorRef = sender
@@ -86,14 +96,16 @@ class Shop extends Actor with ActorLogging {
           val buyProductsFuture: Future[ProductsBoughtResponse] = (shoppingCart ? command).mapTo[ProductsBoughtResponse]
           buyProductsFuture.onComplete {
             case Success(response) =>
-              val currentBalance = balance
-              response.products.foreach { p =>
-                val price = p._1.price
-                val quantity = p._2
-                balance += price * quantity
+              persist(ProductsBought(response.products)) { e =>
+                val currentBalance: BigDecimal = balance
+                response.products.foreach { p =>
+                  val price = p._1.price
+                  val quantity = p._2
+                  balance += price * quantity
+                }
+                log.info(s"Inventory of shopping cart $id was bought for ${balance - currentBalance}")
+                replyTo ! response
               }
-              log.info(s"Inventory of shopping cart $id was bought for ${balance - currentBalance}")
-              replyTo ! response
             case Failure(ex) =>
               log.warning(s"Buying products failed: $ex")
           }
@@ -121,6 +133,20 @@ class Shop extends Actor with ActorLogging {
       val replyTo: ActorRef = sender
       log.info("Current balance: " + balance)
       replyTo ! GetBalanceResponse(balance)
+  }
 
+  override def receiveRecover: Receive = {
+    case ShoppingCartCreated(id) =>
+      val newShoppingCart = context.actorOf(Props(new PersistentShoppingCart(id)), id)
+      shoppingCarts += (id -> newShoppingCart)
+      log.info(s"Recovered shopping cart with id: ${id}")
+
+    case ProductsBought(products) =>
+      products.foreach { p =>
+        val price = p._1.price
+        val quantity = p._2
+        balance += price * quantity
+      }
+      log.info(s"Recovered balance. Current balance: $balance")
   }
 }

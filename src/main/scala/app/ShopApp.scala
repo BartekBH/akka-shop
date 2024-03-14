@@ -4,6 +4,7 @@ import actors.Shop
 import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
+import com.typesafe.config.ConfigFactory
 import routes.LowLevelRestAPI
 
 import scala.util.{Failure, Success}
@@ -12,7 +13,7 @@ object ShopApp {
 
   def main(args: Array[String]): Unit = {
 
-    implicit val system = ActorSystem("ShopApp")
+    implicit val system = ActorSystem("ShopApp", ConfigFactory.load().getConfig("cassandra"))
     implicit val metarializer = ActorMaterializer()
     import system.dispatcher
 
