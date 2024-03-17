@@ -1,13 +1,10 @@
 package actors
 
 import actors.PersistentShoppingCart.Event.ProductsBought
-import actors.PersistentShoppingCart.Response
-import actors.PersistentShoppingCart.Response.ProductAddedResponse
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor.{ActorLogging, ActorRef, Props}
 import akka.pattern.ask
 import akka.persistence.PersistentActor
 import akka.util.Timeout
-import domain.Product
 
 import java.util.UUID
 import scala.collection.mutable
@@ -20,21 +17,17 @@ object Shop {
 
   // commands = messages
   trait Command
-  import actors.PersistentShoppingCart.Command._
   case object GetBalance extends Command
   case object CreateShoppingCart extends Command
 
 
   // events (to persist to Cassandra)
   trait Event
-  import PersistentShoppingCart.Event.ProductsBought
   case class ShoppingCartCreated(id: String) extends Event
 
 
   // responses
   trait Response
-
-  import actors.PersistentShoppingCart.Response._
   case class GetBalanceResponse(balance: BigDecimal) extends Response
   case class ShoppingCartNotExistsResponse(id: String) extends Response
   case class ShoppingCartCreatedResponse(id: String) extends Response

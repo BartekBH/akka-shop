@@ -4,7 +4,6 @@ import akka.actor.{ActorLogging, ActorRef}
 import akka.persistence.PersistentActor
 import domain._
 
-import java.util.UUID
 import scala.collection.mutable
 
 object PersistentShoppingCart {

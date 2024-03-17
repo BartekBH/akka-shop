@@ -7,20 +7,18 @@ import domain._
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethods, HttpRequest, HttpResponse, StatusCodes, Uri}
 import akka.pattern.ask
-import akka.stream.{ActorMaterializer, Materializer}
+import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import spray.json._
 
-import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
-import scala.math.BigDecimal
 
 class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) extends ShopJsonProtocol {
 
-  implicit val metarializer = ActorMaterializer()
-  implicit val timeout = Timeout(5 seconds)
+  implicit val materializer: ActorMaterializer = ActorMaterializer()
+  implicit val timeout: Timeout = Timeout(5 seconds)
   import system.dispatcher
 
   val requestHandler: HttpRequest => Future[HttpResponse] = {
@@ -95,7 +93,7 @@ class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) ext
             )
           }
       }
-      
+
     // GetProducts - required: query with shopping cart's id required
     case HttpRequest(HttpMethods.GET, uri@Uri.Path("/shopping-cart/products"), _, _, _) =>
       val query = uri.query()

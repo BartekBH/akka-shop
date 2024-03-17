@@ -13,8 +13,8 @@ object ShopApp {
 
   def main(args: Array[String]): Unit = {
 
-    implicit val system = ActorSystem("ShopApp", ConfigFactory.load().getConfig("cassandra"))
-    implicit val metarializer = ActorMaterializer()
+    implicit val system: ActorSystem = ActorSystem("ShopApp", ConfigFactory.load().getConfig("cassandra"))
+    implicit val materializer: ActorMaterializer = ActorMaterializer()
     import system.dispatcher
 
     val shopActor = system.actorOf(Props[Shop], "shop")
