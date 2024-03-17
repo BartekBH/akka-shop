@@ -77,7 +77,7 @@ class PersistentShoppingCart(id: String) extends PersistentActor with ActorLoggi
             products.remove(p._1)
           }
 
-          log.info("All products was bought")
+          log.info("The inventory of shopping cart bought")
           replyTo ! ProductsBoughtResponse(currentProducts)
         }
       }

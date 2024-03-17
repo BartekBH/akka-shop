@@ -55,6 +55,7 @@ class Shop extends PersistentActor with ActorLogging {
 
   override def receiveCommand: Receive = {
     case CreateShoppingCart =>
+      log.info("Creating new shopping cart.")
       val replyTo: ActorRef = sender
       val id: String = UUID.randomUUID().toString
 
@@ -103,7 +104,7 @@ class Shop extends PersistentActor with ActorLogging {
                   val quantity = p._2
                   balance += price * quantity
                 }
-                log.info(s"Inventory of shopping cart $id was bought for ${balance - currentBalance}")
+                log.info(s"Inventory of shopping cart $id has been bought for ${balance - currentBalance}")
                 replyTo ! response
               }
             case Failure(ex) =>
@@ -131,7 +132,7 @@ class Shop extends PersistentActor with ActorLogging {
 
     case GetBalance =>
       val replyTo: ActorRef = sender
-      log.info("Current balance: " + balance)
+      log.info("Getting current balance: " + balance)
       replyTo ! GetBalanceResponse(balance)
   }
 

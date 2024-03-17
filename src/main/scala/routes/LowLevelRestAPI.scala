@@ -24,6 +24,7 @@ class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) ext
   import system.dispatcher
 
   val requestHandler: HttpRequest => Future[HttpResponse] = {
+
     // CreateShoppingCart
     case HttpRequest(HttpMethods.POST, Uri.Path("/shop/shopping-cart"), _, _, _) =>
       val shoppingCartCreatedFuture: Future[ShoppingCartCreatedResponse] = (shopActor ? CreateShoppingCart).mapTo[ShoppingCartCreatedResponse]
@@ -37,8 +38,7 @@ class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) ext
         )
       }
 
-
-    // AddProduct ?id=&quantity=   +entity
+    // AddProduct - required: query with shopping cart's id required; entity with product
     case HttpRequest(HttpMethods.PUT, uri@Uri.Path("/shopping-cart/products"), _, entity, _) =>
       val query = uri.query()
       val shoppingCartId: Option[String] = query.get("id")
@@ -53,22 +53,30 @@ class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) ext
           val productJsonString = strictEntity.data.utf8String
           val product = productJsonString.parseJson.convertTo[Product]
 
-          val productAddedFuture: Future[ProductAddedResponse] = (shopActor ? AddProduct(id, product, quantity)).mapTo[ProductAddedResponse]
-          productAddedFuture.map { _ =>
-            HttpResponse(
-              // default status 200 OK
-              entity = HttpEntity(
-                ContentTypes.`text/html(UTF-8)`,
-                "Product added to shopping cart"
+          val productAddedFuture = (shopActor ? AddProduct(id, product, quantity))
+          productAddedFuture.map {
+            case ProductAddedResponse =>
+              HttpResponse(
+                // default status 200 OK
+                entity = HttpEntity(
+                  ContentTypes.`text/html(UTF-8)`,
+                  "Product added to shopping cart"
+                )
               )
-            )
+            case ShoppingCartNotExistsResponse =>
+              HttpResponse(
+                StatusCodes.NotFound, // 404
+                entity = HttpEntity(
+                  ContentTypes.`text/html(UTF-8)`,
+                  "Shopping cart not found"
+                )
+              )
           }
         }
       }
-
       addProductResponseFuture.getOrElse(Future(HttpResponse(StatusCodes.BadRequest)))
 
-    // BuyProducts ?id=
+    // BuyProducts - required: query with shopping cart's id required
     case HttpRequest(HttpMethods.PUT, uri@Uri.Path("/shopping-cart/buy"), _, _, _) =>
       val query = uri.query()
       val maybeId = query.get("id")
@@ -87,9 +95,8 @@ class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) ext
             )
           }
       }
-
-
-    // GetProducts ?id=
+      
+    // GetProducts - required: query with shopping cart's id required
     case HttpRequest(HttpMethods.GET, uri@Uri.Path("/shopping-cart/products"), _, _, _) =>
       val query = uri.query()
       val maybeId = query.get("id")
@@ -125,7 +132,7 @@ class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) ext
         )
       }
 
-
+    // home page
     case HttpRequest(HttpMethods.GET, Uri.Path("/"), _, _, _) =>
       Future(HttpResponse(
         // default status 200 OK
@@ -135,6 +142,7 @@ class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) ext
         )
       ))
 
+    // page not found
     case request: HttpRequest =>
       request.discardEntityBytes()
       Future(HttpResponse(
