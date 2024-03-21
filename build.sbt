@@ -13,7 +13,10 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttpVersion,
   "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpVersion,
   // akka persistence
-  "com.typesafe.akka"          %% "akka-persistence" % akkaVersion,
+  "com.typesafe.akka" %% "akka-persistence" % akkaVersion,
   // Cassandra
-  "com.typesafe.akka" %% "akka-persistence-cassandra" % cassandraVersion
+  "com.typesafe.akka" %% "akka-persistence-cassandra" % cassandraVersion,
+  // tests
+  "com.typesafe.akka" %% "akka-testkit" % akkaVersion,
+  "org.scalatest" %% "scalatest" % "3.2.15"
 )
