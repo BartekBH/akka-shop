@@ -22,7 +22,7 @@ object Shop {
 
 
   // events (to persist to Cassandra)
-  trait Event
+  trait Event extends Serializable
   case class ShoppingCartCreated(id: String) extends Event
 
 

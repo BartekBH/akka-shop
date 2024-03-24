@@ -17,7 +17,7 @@ object PersistentShoppingCart {
   }
 
   // events (to persist to Cassandra)
-  trait Event
+  trait Event extends Serializable
   object Event {
     case class ProductAdded(product: Product, quantity: Int) extends Event
     case class ProductsBought(products: mutable.Map[Product, Int])
