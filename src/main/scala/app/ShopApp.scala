@@ -5,7 +5,7 @@ import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
-import routes.LowLevelRestAPI
+import routes.{HighLevelRestAPI, LowLevelRestAPI}
 
 import scala.util.{Failure, Success}
 
@@ -18,9 +18,9 @@ object ShopApp {
     import system.dispatcher
 
     val shopActor = system.actorOf(Props[Shop], "shop")
-    val api = new LowLevelRestAPI(shopActor, system)
+    val api = new HighLevelRestAPI(shopActor, system)
 
-    val httpBindingFuture = Http().bindAndHandleAsync(api.requestHandler, "localhost", 8080)
+    val httpBindingFuture = Http().bindAndHandle(api.shopServerRoute, "localhost", 8080)
     httpBindingFuture.onComplete {
       case Success(binding) =>
         val address = binding.localAddress

@@ -15,6 +15,9 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
+/**
+ * Not used anymore. Reimplemented as HighLevelRestAPI
+ */
 class LowLevelRestAPI(shopActor: ActorRef, implicit val system: ActorSystem) extends ShopJsonProtocol {
 
   implicit val materializer: ActorMaterializer = ActorMaterializer()
